@@ -1,0 +1,1107 @@
+{
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# Nigerian Language Identifier\n",
+        "\n",
+        "**Problem:** Many apps that serve Nigerian users need to know what language a piece of text is written in — Yoruba, Hausa, Igbo, or English — before they can translate it, route it, or respond appropriately.\n",
+        "\n",
+        "**Goal:** Train a machine learning model that takes a short phrase of text and predicts which of these four languages it's written in.\n",
+        "\n",
+        "**Approach:** Using a public multi-language dataset, this notebook extracts character- and word-level patterns from text (TF-IDF) and trains a Logistic Regression classifier to distinguish between the four languages. The model achieves 99.9% accuracy on held-out test data, with a documented limitation on very short, informal phrases."
+      ],
+      "metadata": {
+        "id": "bkrgrb1lyRCU"
+      }
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "vooApDF9R9ER"
+      },
+      "outputs": [],
+      "source": [
+        "!pip install datasets scikit-learn pandas joblib -q"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "Step 1: Install required packages"
+      ],
+      "metadata": {
+        "id": "Y4xhf9QizAya"
+      }
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 328
+        },
+        "collapsed": true,
+        "id": "SAg1XzyIfzEb",
+        "outputId": "189cf21a-9fc3-4db3-f857-c33e0adeaa88"
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Total rows loaded: 22295\n",
+            "language\n",
+            "Hausa      9008\n",
+            "Igbo       5714\n",
+            "Yoruba     4171\n",
+            "English    3402\n",
+            "Name: count, dtype: int64\n"
+          ]
+        },
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "                                          sentence language\n",
+              "0                    Bude kofar. Na san kina ciki.    Hausa\n",
+              "1  Na ga wani aikin dabba mai ban mamaki a circus.    Hausa\n",
+              "2                 Shin kun yarda ko baku yarda ba?    Hausa\n",
+              "3                        Kun ce zaku taimaka musu.    Hausa\n",
+              "4              Sun dauki fim din a ainihin sahara.    Hausa"
+            ],
+            "text/html": [
+              "\n",
+              "  <div id=\"df-c0f6792a-3dea-45cf-96a4-4ae7080e4dd6\" class=\"colab-df-container\">\n",
+              "    <div>\n",
+              "<style scoped>\n",
+              "    .dataframe tbody tr th:only-of-type {\n",
+              "        vertical-align: middle;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe tbody tr th {\n",
+              "        vertical-align: top;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe thead th {\n",
+              "        text-align: right;\n",
+              "    }\n",
+              "</style>\n",
+              "<table border=\"1\" class=\"dataframe\">\n",
+              "  <thead>\n",
+              "    <tr style=\"text-align: right;\">\n",
+              "      <th></th>\n",
+              "      <th>sentence</th>\n",
+              "      <th>language</th>\n",
+              "    </tr>\n",
+              "  </thead>\n",
+              "  <tbody>\n",
+              "    <tr>\n",
+              "      <th>0</th>\n",
+              "      <td>Bude kofar. Na san kina ciki.</td>\n",
+              "      <td>Hausa</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>1</th>\n",
+              "      <td>Na ga wani aikin dabba mai ban mamaki a circus.</td>\n",
+              "      <td>Hausa</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>2</th>\n",
+              "      <td>Shin kun yarda ko baku yarda ba?</td>\n",
+              "      <td>Hausa</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>3</th>\n",
+              "      <td>Kun ce zaku taimaka musu.</td>\n",
+              "      <td>Hausa</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>4</th>\n",
+              "      <td>Sun dauki fim din a ainihin sahara.</td>\n",
+              "      <td>Hausa</td>\n",
+              "    </tr>\n",
+              "  </tbody>\n",
+              "</table>\n",
+              "</div>\n",
+              "    <div class=\"colab-df-buttons\">\n",
+              "\n",
+              "  <div class=\"colab-df-container\">\n",
+              "    <button class=\"colab-df-convert\" onclick=\"convertToInteractive('df-c0f6792a-3dea-45cf-96a4-4ae7080e4dd6')\"\n",
+              "            title=\"Convert this dataframe to an interactive table.\"\n",
+              "            style=\"display:none;\">\n",
+              "\n",
+              "  <svg xmlns=\"http://www.w3.org/2000/svg\" height=\"24px\" viewBox=\"0 -960 960 960\">\n",
+              "    <path d=\"M120-120v-720h720v720H120Zm60-500h600v-160H180v160Zm220 220h160v-160H400v160Zm0 220h160v-160H400v160ZM180-400h160v-160H180v160Zm440 0h160v-160H620v160ZM180-180h160v-160H180v160Zm440 0h160v-160H620v160Z\"/>\n",
+              "  </svg>\n",
+              "    </button>\n",
+              "\n",
+              "  <style>\n",
+              "    .colab-df-container {\n",
+              "      display:flex;\n",
+              "      gap: 12px;\n",
+              "    }\n",
+              "\n",
+              "    .colab-df-convert {\n",
+              "      background-color: #E8F0FE;\n",
+              "      border: none;\n",
+              "      border-radius: 50%;\n",
+              "      cursor: pointer;\n",
+              "      display: none;\n",
+              "      fill: #1967D2;\n",
+              "      height: 32px;\n",
+              "      padding: 0 0 0 0;\n",
+              "      width: 32px;\n",
+              "    }\n",
+              "\n",
+              "    .colab-df-convert:hover {\n",
+              "      background-color: #E2EBFA;\n",
+              "      box-shadow: 0px 1px 2px rgba(60, 64, 67, 0.3), 0px 1px 3px 1px rgba(60, 64, 67, 0.15);\n",
+              "      fill: #174EA6;\n",
+              "    }\n",
+              "\n",
+              "    .colab-df-buttons div {\n",
+              "      margin-bottom: 4px;\n",
+              "    }\n",
+              "\n",
+              "    [theme=dark] .colab-df-convert {\n",
+              "      background-color: #3B4455;\n",
+              "      fill: #D2E3FC;\n",
+              "    }\n",
+              "\n",
+              "    [theme=dark] .colab-df-convert:hover {\n",
+              "      background-color: #434B5C;\n",
+              "      box-shadow: 0px 1px 3px 1px rgba(0, 0, 0, 0.15);\n",
+              "      filter: drop-shadow(0px 1px 2px rgba(0, 0, 0, 0.3));\n",
+              "      fill: #FFFFFF;\n",
+              "    }\n",
+              "  </style>\n",
+              "\n",
+              "    <script>\n",
+              "      const buttonEl =\n",
+              "        document.querySelector('#df-c0f6792a-3dea-45cf-96a4-4ae7080e4dd6 button.colab-df-convert');\n",
+              "      buttonEl.style.display =\n",
+              "        google.colab.kernel.accessAllowed ? 'block' : 'none';\n",
+              "\n",
+              "      async function convertToInteractive(key) {\n",
+              "        const element = document.querySelector('#df-c0f6792a-3dea-45cf-96a4-4ae7080e4dd6');\n",
+              "        const dataTable =\n",
+              "          await google.colab.kernel.invokeFunction('convertToInteractive',\n",
+              "                                                    [key], {});\n",
+              "        if (!dataTable) return;\n",
+              "\n",
+              "        const docLinkHtml = 'Like what you see? Visit the ' +\n",
+              "          '<a target=\"_blank\" href=https://colab.research.google.com/notebooks/data_table.ipynb>data table notebook</a>'\n",
+              "          + ' to learn more about interactive tables.';\n",
+              "        element.innerHTML = '';\n",
+              "        dataTable['output_type'] = 'display_data';\n",
+              "        await google.colab.output.renderOutput(dataTable, element);\n",
+              "        const docLink = document.createElement('div');\n",
+              "        docLink.innerHTML = docLinkHtml;\n",
+              "        element.appendChild(docLink);\n",
+              "      }\n",
+              "    </script>\n",
+              "  </div>\n",
+              "\n",
+              "\n",
+              "    </div>\n",
+              "  </div>\n"
+            ],
+            "application/vnd.google.colaboratory.intrinsic+json": {
+              "type": "dataframe",
+              "variable_name": "data",
+              "summary": "{\n  \"name\": \"data\",\n  \"rows\": 22295,\n  \"fields\": [\n    {\n      \"column\": \"sentence\",\n      \"properties\": {\n        \"dtype\": \"string\",\n        \"num_unique_values\": 18103,\n        \"samples\": [\n          \"uhie\",\n          \"maka na \\u1ecd b\\u1ee5 aka ch\\u1ecbch\\u1ecbch\\u1ecb.\",\n          \"edemede na ag\\u1ee5mag\\u1ee5 as\\u1ee5s\\u1ee5 Igbo\"\n        ],\n        \"semantic_type\": \"\",\n        \"description\": \"\"\n      }\n    },\n    {\n      \"column\": \"language\",\n      \"properties\": {\n        \"dtype\": \"category\",\n        \"num_unique_values\": 4,\n        \"samples\": [\n          \"Igbo\",\n          \"English\",\n          \"Hausa\"\n        ],\n        \"semantic_type\": \"\",\n        \"description\": \"\"\n      }\n    }\n  ]\n}"
+            }
+          },
+          "metadata": {},
+          "execution_count": 7
+        }
+      ],
+      "source": [
+        "from datasets import load_dataset\n",
+        "import pandas as pd\n",
+        "\n",
+        "languages = {\"hausa\": \"Hausa\", \"igbo\": \"Igbo\", \"yoruba\": \"Yoruba\", \"english\": \"English\"}\n",
+        "all_data = []\n",
+        "\n",
+        "for code, name in languages.items():\n",
+        "    ds = load_dataset(\"benjaminogbonna/nigerian_common_voice_dataset\", code)\n",
+        "    for split in ds.keys():\n",
+        "        df = ds[split].to_pandas()\n",
+        "        df[\"language\"] = name\n",
+        "        df[\"split_source\"] = split\n",
+        "        all_data.append(df)\n",
+        "\n",
+        "data = pd.concat(all_data, ignore_index=True)\n",
+        "data = data[[\"sentence\", \"language\"]]  # we only need the text and its label now\n",
+        "print(\"Total rows loaded:\", len(data))\n",
+        "print(data[\"language\"].value_counts())\n",
+        "data.head()"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "## Step 2: Load and prepare the dataset\n",
+        "\n",
+        "We use a public Hugging Face dataset containing labeled text in Hausa, Igbo, Yoruba, and English."
+      ],
+      "metadata": {
+        "id": "a_pbq3CtzbL0"
+      }
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "4lpOBhB1mNmN",
+        "outputId": "6f47ead6-cd78-4055-99a7-a6e8463a52a2"
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "language\n",
+            "Hausa      9008\n",
+            "Igbo       5714\n",
+            "Yoruba     4171\n",
+            "English    3402\n",
+            "Name: count, dtype: int64\n"
+          ]
+        }
+      ],
+      "source": [
+        "print(data[\"language\"].value_counts())"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "### Step 3: Split data into training and testing sets"
+      ],
+      "metadata": {
+        "id": "7-Nc8mgQ0Y3l"
+      }
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "GRB9GN_fqbxl",
+        "outputId": "63867301-5afb-4172-e5c3-90b988b28f8a",
+        "collapsed": true
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Training examples: 17836\n",
+            "Testing examples: 4459\n"
+          ]
+        }
+      ],
+      "source": [
+        "from sklearn.model_selection import train_test_split\n",
+        "\n",
+        "X_train, X_test, y_train, y_test = train_test_split(\n",
+        "    data[\"sentence\"], data[\"language\"], test_size=0.2, random_state=42\n",
+        ")\n",
+        "\n",
+        "print(\"Training examples:\", len(X_train))\n",
+        "print(\"Testing examples:\", len(X_test))"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "## Step 4: Convert text into numerical features (TF-IDF)\n",
+        "\n",
+        "We combine character-level and word-level patterns to capture both spelling/diacritic differences and whole-word cues."
+      ],
+      "metadata": {
+        "id": "SAW0cCEO0lrs"
+      }
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "jmi5hSlO7Utv",
+        "outputId": "a1ee0e7a-5ca4-4e5b-cbb0-58a602390d85"
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Combined training shape: (17836, 7000)\n"
+          ]
+        }
+      ],
+      "source": [
+        "from sklearn.feature_extraction.text import TfidfVectorizer\n",
+        "from scipy.sparse import hstack\n",
+        "\n",
+        "# Character-level patterns (as before, but slightly wider range)\n",
+        "char_vectorizer = TfidfVectorizer(analyzer=\"char_wb\", ngram_range=(1, 4), max_features=5000)\n",
+        "\n",
+        "# Word-level patterns (new) - helps catch whole short words like \"Kedu\" or \"Bawo\"\n",
+        "word_vectorizer = TfidfVectorizer(analyzer=\"word\", ngram_range=(1, 2), max_features=2000)\n",
+        "\n",
+        "# Fit both on training data\n",
+        "X_train_char = char_vectorizer.fit_transform(X_train)\n",
+        "X_train_word = word_vectorizer.fit_transform(X_train)\n",
+        "\n",
+        "# Combine them into one feature set\n",
+        "X_train_combined = hstack([X_train_char, X_train_word])\n",
+        "\n",
+        "# Do the same transform (not fit) on test data\n",
+        "X_test_char = char_vectorizer.transform(X_test)\n",
+        "X_test_word = word_vectorizer.transform(X_test)\n",
+        "X_test_combined = hstack([X_test_char, X_test_word])\n",
+        "\n",
+        "print(\"Combined training shape:\", X_train_combined.shape)"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "## Step 5: Train the classifier and evaluate accuracy"
+      ],
+      "metadata": {
+        "id": "SBg-e-H252eH"
+      }
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "_iAODRm-7nK2",
+        "outputId": "69566fac-66b7-44d1-fe07-3955f73e5727"
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Accuracy: 0.9993272034088361\n",
+            "\n",
+            "              precision    recall  f1-score   support\n",
+            "\n",
+            "     English       1.00      1.00      1.00       656\n",
+            "       Hausa       1.00      1.00      1.00      1853\n",
+            "        Igbo       1.00      1.00      1.00      1111\n",
+            "      Yoruba       1.00      1.00      1.00       839\n",
+            "\n",
+            "    accuracy                           1.00      4459\n",
+            "   macro avg       1.00      1.00      1.00      4459\n",
+            "weighted avg       1.00      1.00      1.00      4459\n",
+            "\n"
+          ]
+        }
+      ],
+      "source": [
+        "from sklearn.linear_model import LogisticRegression\n",
+        "from sklearn.metrics import classification_report, accuracy_score\n",
+        "\n",
+        "model = LogisticRegression(max_iter=1000)\n",
+        "model.fit(X_train_combined, y_train)\n",
+        "\n",
+        "y_pred = model.predict(X_test_combined)\n",
+        "\n",
+        "print(\"Accuracy:\", accuracy_score(y_test, y_pred))\n",
+        "print()\n",
+        "print(classification_report(y_test, y_pred))"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "## Step 6: Test the model on custom phrases"
+      ],
+      "metadata": {
+        "id": "7R2RtW756Kvm"
+      }
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "cT8IgO_C8PPl",
+        "outputId": "fcaf39a4-1d0d-4b02-af3e-afbe2192134f"
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Hausa\n",
+            "Igbo\n",
+            "Igbo\n",
+            "Igbo\n",
+            "Yoruba\n"
+          ]
+        }
+      ],
+      "source": [
+        "def predict_language(text):\n",
+        "    char_vec = char_vectorizer.transform([text])\n",
+        "    word_vec = word_vectorizer.transform([text])\n",
+        "    combined_vec = hstack([char_vec, word_vec])\n",
+        "    prediction = model.predict(combined_vec)[0]\n",
+        "    return prediction\n",
+        "\n",
+        "# Retest the same short phrases from before\n",
+        "print(predict_language(\"Bawo ni?\"))              # Expect Yoruba\n",
+        "print(predict_language(\"Kedu\"))                   # Expect Igbo\n",
+        "print(predict_language(\"Nagode\"))                 # Expect Hausa\n",
+        "print(predict_language(\"Kedu afa gị?\"))            # Expect Igbo\n",
+        "print(predict_language(\"Nibo ni baluwẹ wa?\"))      # Expect Yoruba"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "## Step 7: Interactive demo\n",
+        "\n",
+        "Type a phrase below to see the model predict its language live."
+      ],
+      "metadata": {
+        "id": "lgA6wh7R6aZQ"
+      }
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 81,
+          "referenced_widgets": [
+            "d2d76fedfdf94d24afb270ecdb57b1a2",
+            "8d302ca87d1c4612a37f56dc201f195c",
+            "10f14193dbab4a6c98b625ee8194c9f5",
+            "8411bdb0a1d940aaba8baeb7fd438fe1",
+            "9fd45b6ee538497d86cf8024eec2fd02",
+            "477a710c5dca436a9f85d8660c1deb14",
+            "ff3eeae34f6a475b91dc4912ef289391",
+            "62a7c8af71454530ad9d42969bb3c743"
+          ]
+        },
+        "id": "KBO8xKD4xFr_",
+        "outputId": "6d0eb0fc-8ef0-41f1-ac0c-a45ae21697f7"
+      },
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": [
+              "Text(value='', description='Text:', layout=Layout(width='500px'), placeholder='Type a phrase in English, Hausa…"
+            ],
+            "application/vnd.jupyter.widget-view+json": {
+              "version_major": 2,
+              "version_minor": 0,
+              "model_id": "d2d76fedfdf94d24afb270ecdb57b1a2"
+            }
+          },
+          "metadata": {}
+        },
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": [
+              "Button(description='Detect Language', style=ButtonStyle())"
+            ],
+            "application/vnd.jupyter.widget-view+json": {
+              "version_major": 2,
+              "version_minor": 0,
+              "model_id": "8411bdb0a1d940aaba8baeb7fd438fe1"
+            }
+          },
+          "metadata": {}
+        },
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": [
+              "Output()"
+            ],
+            "application/vnd.jupyter.widget-view+json": {
+              "version_major": 2,
+              "version_minor": 0,
+              "model_id": "ff3eeae34f6a475b91dc4912ef289391"
+            }
+          },
+          "metadata": {}
+        }
+      ],
+      "source": [
+        "import ipywidgets as widgets\n",
+        "from IPython.display import display, clear_output\n",
+        "\n",
+        "text_input = widgets.Text(\n",
+        "    placeholder=\"Type a phrase in English, Hausa, Igbo, or Yoruba...\",\n",
+        "    description=\"Text:\",\n",
+        "    layout=widgets.Layout(width=\"500px\")\n",
+        ")\n",
+        "button = widgets.Button(description=\"Detect Language\")\n",
+        "output = widgets.Output()\n",
+        "\n",
+        "def on_button_click(b):\n",
+        "    with output:\n",
+        "        clear_output()\n",
+        "        text = text_input.value\n",
+        "        if text.strip() == \"\":        print(\"Please type something first.\")\n",
+        "        else:\n",
+        "            prediction = predict_language(text)\n",
+        "            print(f\"Predicted language: {prediction}\")\n",
+        "\n",
+        "button.on_click(on_button_click)\n",
+        "\n",
+        "display(text_input, button, output)"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "## Step 8: Save the trained model for reuse outside this notebook"
+      ],
+      "metadata": {
+        "id": "q5YVXO_x6tAV"
+      }
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "ia2oQLkLDRv2",
+        "outputId": "5dbc3f7e-9aed-41a0-d037-297a5bff2611"
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Saved all 3 files!\n"
+          ]
+        }
+      ],
+      "source": [
+        "import joblib\n",
+        "\n",
+        "joblib.dump(model, \"language_model.pkl\")\n",
+        "joblib.dump(char_vectorizer, \"char_vectorizer.pkl\")\n",
+        "joblib.dump(word_vectorizer, \"word_vectorizer.pkl\")\n",
+        "\n",
+        "print(\"Saved all 3 files!\")"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 17
+        },
+        "id": "3qFjfC4iDiHl",
+        "outputId": "82803eb6-392e-4eff-cb64-d657239e7957"
+      },
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": [
+              "<IPython.core.display.Javascript object>"
+            ],
+            "application/javascript": [
+              "\n",
+              "    async function download(id, filename, size) {\n",
+              "      if (!google.colab.kernel.accessAllowed) {\n",
+              "        return;\n",
+              "      }\n",
+              "      const div = document.createElement('div');\n",
+              "      const label = document.createElement('label');\n",
+              "      label.textContent = `Downloading \"${filename}\": `;\n",
+              "      div.appendChild(label);\n",
+              "      const progress = document.createElement('progress');\n",
+              "      progress.max = size;\n",
+              "      div.appendChild(progress);\n",
+              "      document.body.appendChild(div);\n",
+              "\n",
+              "      const buffers = [];\n",
+              "      let downloaded = 0;\n",
+              "\n",
+              "      const channel = await google.colab.kernel.comms.open(id);\n",
+              "      // Send a message to notify the kernel that we're ready.\n",
+              "      channel.send({})\n",
+              "\n",
+              "      for await (const message of channel.messages) {\n",
+              "        // Send a message to notify the kernel that we're ready.\n",
+              "        channel.send({})\n",
+              "        if (message.buffers) {\n",
+              "          for (const buffer of message.buffers) {\n",
+              "            buffers.push(buffer);\n",
+              "            downloaded += buffer.byteLength;\n",
+              "            progress.value = downloaded;\n",
+              "          }\n",
+              "        }\n",
+              "      }\n",
+              "      const blob = new Blob(buffers, {type: 'application/binary'});\n",
+              "      const a = document.createElement('a');\n",
+              "      a.href = window.URL.createObjectURL(blob);\n",
+              "      a.download = filename;\n",
+              "      div.appendChild(a);\n",
+              "      a.click();\n",
+              "      div.remove();\n",
+              "    }\n",
+              "  "
+            ]
+          },
+          "metadata": {}
+        },
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": [
+              "<IPython.core.display.Javascript object>"
+            ],
+            "application/javascript": [
+              "download(\"download_2dc2038b-805b-4f1c-9219-9668790c4b95\", \"language_model.pkl\", 225047)"
+            ]
+          },
+          "metadata": {}
+        },
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": [
+              "<IPython.core.display.Javascript object>"
+            ],
+            "application/javascript": [
+              "\n",
+              "    async function download(id, filename, size) {\n",
+              "      if (!google.colab.kernel.accessAllowed) {\n",
+              "        return;\n",
+              "      }\n",
+              "      const div = document.createElement('div');\n",
+              "      const label = document.createElement('label');\n",
+              "      label.textContent = `Downloading \"${filename}\": `;\n",
+              "      div.appendChild(label);\n",
+              "      const progress = document.createElement('progress');\n",
+              "      progress.max = size;\n",
+              "      div.appendChild(progress);\n",
+              "      document.body.appendChild(div);\n",
+              "\n",
+              "      const buffers = [];\n",
+              "      let downloaded = 0;\n",
+              "\n",
+              "      const channel = await google.colab.kernel.comms.open(id);\n",
+              "      // Send a message to notify the kernel that we're ready.\n",
+              "      channel.send({})\n",
+              "\n",
+              "      for await (const message of channel.messages) {\n",
+              "        // Send a message to notify the kernel that we're ready.\n",
+              "        channel.send({})\n",
+              "        if (message.buffers) {\n",
+              "          for (const buffer of message.buffers) {\n",
+              "            buffers.push(buffer);\n",
+              "            downloaded += buffer.byteLength;\n",
+              "            progress.value = downloaded;\n",
+              "          }\n",
+              "        }\n",
+              "      }\n",
+              "      const blob = new Blob(buffers, {type: 'application/binary'});\n",
+              "      const a = document.createElement('a');\n",
+              "      a.href = window.URL.createObjectURL(blob);\n",
+              "      a.download = filename;\n",
+              "      div.appendChild(a);\n",
+              "      a.click();\n",
+              "      div.remove();\n",
+              "    }\n",
+              "  "
+            ]
+          },
+          "metadata": {}
+        },
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": [
+              "<IPython.core.display.Javascript object>"
+            ],
+            "application/javascript": [
+              "download(\"download_aa26ddf6-63fa-41e8-b9c8-88514097588b\", \"char_vectorizer.pkl\", 168480)"
+            ]
+          },
+          "metadata": {}
+        },
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": [
+              "<IPython.core.display.Javascript object>"
+            ],
+            "application/javascript": [
+              "\n",
+              "    async function download(id, filename, size) {\n",
+              "      if (!google.colab.kernel.accessAllowed) {\n",
+              "        return;\n",
+              "      }\n",
+              "      const div = document.createElement('div');\n",
+              "      const label = document.createElement('label');\n",
+              "      label.textContent = `Downloading \"${filename}\": `;\n",
+              "      div.appendChild(label);\n",
+              "      const progress = document.createElement('progress');\n",
+              "      progress.max = size;\n",
+              "      div.appendChild(progress);\n",
+              "      document.body.appendChild(div);\n",
+              "\n",
+              "      const buffers = [];\n",
+              "      let downloaded = 0;\n",
+              "\n",
+              "      const channel = await google.colab.kernel.comms.open(id);\n",
+              "      // Send a message to notify the kernel that we're ready.\n",
+              "      channel.send({})\n",
+              "\n",
+              "      for await (const message of channel.messages) {\n",
+              "        // Send a message to notify the kernel that we're ready.\n",
+              "        channel.send({})\n",
+              "        if (message.buffers) {\n",
+              "          for (const buffer of message.buffers) {\n",
+              "            buffers.push(buffer);\n",
+              "            downloaded += buffer.byteLength;\n",
+              "            progress.value = downloaded;\n",
+              "          }\n",
+              "        }\n",
+              "      }\n",
+              "      const blob = new Blob(buffers, {type: 'application/binary'});\n",
+              "      const a = document.createElement('a');\n",
+              "      a.href = window.URL.createObjectURL(blob);\n",
+              "      a.download = filename;\n",
+              "      div.appendChild(a);\n",
+              "      a.click();\n",
+              "      div.remove();\n",
+              "    }\n",
+              "  "
+            ]
+          },
+          "metadata": {}
+        },
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": [
+              "<IPython.core.display.Javascript object>"
+            ],
+            "application/javascript": [
+              "download(\"download_538e7d37-f4b6-4610-9a94-edcb5ad679c3\", \"word_vectorizer.pkl\", 73661)"
+            ]
+          },
+          "metadata": {}
+        }
+      ],
+      "source": [
+        "from google.colab import files\n",
+        "\n",
+        "files.download(\"language_model.pkl\")\n",
+        "files.download(\"char_vectorizer.pkl\")\n",
+        "files.download(\"word_vectorizer.pkl\")"
+      ]
+    }
+  ],
+  "metadata": {
+    "colab": {
+      "provenance": []
+    },
+    "kernelspec": {
+      "display_name": "Python 3",
+      "name": "python3"
+    },
+    "language_info": {
+      "name": "python"
+    },
+    "widgets": {
+      "application/vnd.jupyter.widget-state+json": {
+        "state": {
+          "d2d76fedfdf94d24afb270ecdb57b1a2": {
+            "model_module": "@jupyter-widgets/controls",
+            "model_name": "TextModel",
+            "model_module_version": "1.5.0",
+            "state": {
+              "_dom_classes": [],
+              "_model_module": "@jupyter-widgets/controls",
+              "_model_module_version": "1.5.0",
+              "_model_name": "TextModel",
+              "_view_count": null,
+              "_view_module": "@jupyter-widgets/controls",
+              "_view_module_version": "1.5.0",
+              "_view_name": "TextView",
+              "continuous_update": true,
+              "description": "Text:",
+              "description_tooltip": null,
+              "disabled": false,
+              "layout": "IPY_MODEL_8d302ca87d1c4612a37f56dc201f195c",
+              "placeholder": "Type a phrase in English, Hausa, Igbo, or Yoruba...",
+              "style": "IPY_MODEL_10f14193dbab4a6c98b625ee8194c9f5",
+              "value": ""
+            }
+          },
+          "8d302ca87d1c4612a37f56dc201f195c": {
+            "model_module": "@jupyter-widgets/base",
+            "model_name": "LayoutModel",
+            "model_module_version": "1.2.0",
+            "state": {
+              "_model_module": "@jupyter-widgets/base",
+              "_model_module_version": "1.2.0",
+              "_model_name": "LayoutModel",
+              "_view_count": null,
+              "_view_module": "@jupyter-widgets/base",
+              "_view_module_version": "1.2.0",
+              "_view_name": "LayoutView",
+              "align_content": null,
+              "align_items": null,
+              "align_self": null,
+              "border": null,
+              "bottom": null,
+              "display": null,
+              "flex": null,
+              "flex_flow": null,
+              "grid_area": null,
+              "grid_auto_columns": null,
+              "grid_auto_flow": null,
+              "grid_auto_rows": null,
+              "grid_column": null,
+              "grid_gap": null,
+              "grid_row": null,
+              "grid_template_areas": null,
+              "grid_template_columns": null,
+              "grid_template_rows": null,
+              "height": null,
+              "justify_content": null,
+              "justify_items": null,
+              "left": null,
+              "margin": null,
+              "max_height": null,
+              "max_width": null,
+              "min_height": null,
+              "min_width": null,
+              "object_fit": null,
+              "object_position": null,
+              "order": null,
+              "overflow": null,
+              "overflow_x": null,
+              "overflow_y": null,
+              "padding": null,
+              "right": null,
+              "top": null,
+              "visibility": null,
+              "width": "500px"
+            }
+          },
+          "10f14193dbab4a6c98b625ee8194c9f5": {
+            "model_module": "@jupyter-widgets/controls",
+            "model_name": "DescriptionStyleModel",
+            "model_module_version": "1.5.0",
+            "state": {
+              "_model_module": "@jupyter-widgets/controls",
+              "_model_module_version": "1.5.0",
+              "_model_name": "DescriptionStyleModel",
+              "_view_count": null,
+              "_view_module": "@jupyter-widgets/base",
+              "_view_module_version": "1.2.0",
+              "_view_name": "StyleView",
+              "description_width": ""
+            }
+          },
+          "8411bdb0a1d940aaba8baeb7fd438fe1": {
+            "model_module": "@jupyter-widgets/controls",
+            "model_name": "ButtonModel",
+            "model_module_version": "1.5.0",
+            "state": {
+              "_dom_classes": [],
+              "_model_module": "@jupyter-widgets/controls",
+              "_model_module_version": "1.5.0",
+              "_model_name": "ButtonModel",
+              "_view_count": null,
+              "_view_module": "@jupyter-widgets/controls",
+              "_view_module_version": "1.5.0",
+              "_view_name": "ButtonView",
+              "button_style": "",
+              "description": "Detect Language",
+              "disabled": false,
+              "icon": "",
+              "layout": "IPY_MODEL_9fd45b6ee538497d86cf8024eec2fd02",
+              "style": "IPY_MODEL_477a710c5dca436a9f85d8660c1deb14",
+              "tooltip": ""
+            }
+          },
+          "9fd45b6ee538497d86cf8024eec2fd02": {
+            "model_module": "@jupyter-widgets/base",
+            "model_name": "LayoutModel",
+            "model_module_version": "1.2.0",
+            "state": {
+              "_model_module": "@jupyter-widgets/base",
+              "_model_module_version": "1.2.0",
+              "_model_name": "LayoutModel",
+              "_view_count": null,
+              "_view_module": "@jupyter-widgets/base",
+              "_view_module_version": "1.2.0",
+              "_view_name": "LayoutView",
+              "align_content": null,
+              "align_items": null,
+              "align_self": null,
+              "border": null,
+              "bottom": null,
+              "display": null,
+              "flex": null,
+              "flex_flow": null,
+              "grid_area": null,
+              "grid_auto_columns": null,
+              "grid_auto_flow": null,
+              "grid_auto_rows": null,
+              "grid_column": null,
+              "grid_gap": null,
+              "grid_row": null,
+              "grid_template_areas": null,
+              "grid_template_columns": null,
+              "grid_template_rows": null,
+              "height": null,
+              "justify_content": null,
+              "justify_items": null,
+              "left": null,
+              "margin": null,
+              "max_height": null,
+              "max_width": null,
+              "min_height": null,
+              "min_width": null,
+              "object_fit": null,
+              "object_position": null,
+              "order": null,
+              "overflow": null,
+              "overflow_x": null,
+              "overflow_y": null,
+              "padding": null,
+              "right": null,
+              "top": null,
+              "visibility": null,
+              "width": null
+            }
+          },
+          "477a710c5dca436a9f85d8660c1deb14": {
+            "model_module": "@jupyter-widgets/controls",
+            "model_name": "ButtonStyleModel",
+            "model_module_version": "1.5.0",
+            "state": {
+              "_model_module": "@jupyter-widgets/controls",
+              "_model_module_version": "1.5.0",
+              "_model_name": "ButtonStyleModel",
+              "_view_count": null,
+              "_view_module": "@jupyter-widgets/base",
+              "_view_module_version": "1.2.0",
+              "_view_name": "StyleView",
+              "button_color": null,
+              "font_weight": ""
+            }
+          },
+          "ff3eeae34f6a475b91dc4912ef289391": {
+            "model_module": "@jupyter-widgets/output",
+            "model_name": "OutputModel",
+            "model_module_version": "1.0.0",
+            "state": {
+              "_dom_classes": [],
+              "_model_module": "@jupyter-widgets/output",
+              "_model_module_version": "1.0.0",
+              "_model_name": "OutputModel",
+              "_view_count": null,
+              "_view_module": "@jupyter-widgets/output",
+              "_view_module_version": "1.0.0",
+              "_view_name": "OutputView",
+              "layout": "IPY_MODEL_62a7c8af71454530ad9d42969bb3c743",
+              "msg_id": "",
+              "outputs": []
+            }
+          },
+          "62a7c8af71454530ad9d42969bb3c743": {
+            "model_module": "@jupyter-widgets/base",
+            "model_name": "LayoutModel",
+            "model_module_version": "1.2.0",
+            "state": {
+              "_model_module": "@jupyter-widgets/base",
+              "_model_module_version": "1.2.0",
+              "_model_name": "LayoutModel",
+              "_view_count": null,
+              "_view_module": "@jupyter-widgets/base",
+              "_view_module_version": "1.2.0",
+              "_view_name": "LayoutView",
+              "align_content": null,
+              "align_items": null,
+              "align_self": null,
+              "border": null,
+              "bottom": null,
+              "display": null,
+              "flex": null,
+              "flex_flow": null,
+              "grid_area": null,
+              "grid_auto_columns": null,
+              "grid_auto_flow": null,
+              "grid_auto_rows": null,
+              "grid_column": null,
+              "grid_gap": null,
+              "grid_row": null,
+              "grid_template_areas": null,
+              "grid_template_columns": null,
+              "grid_template_rows": null,
+              "height": null,
+              "justify_content": null,
+              "justify_items": null,
+              "left": null,
+              "margin": null,
+              "max_height": null,
+              "max_width": null,
+              "min_height": null,
+              "min_width": null,
+              "object_fit": null,
+              "object_position": null,
+              "order": null,
+              "overflow": null,
+              "overflow_x": null,
+              "overflow_y": null,
+              "padding": null,
+              "right": null,
+              "top": null,
+              "visibility": null,
+              "width": null
+            }
+          }
+        },
+        "version_major": 2,
+        "version_minor": 0
+      }
+    }
+  },
+  "nbformat": 4,
+  "nbformat_minor": 0
+}
