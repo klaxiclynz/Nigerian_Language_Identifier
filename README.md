@@ -26,6 +26,8 @@ This project trains a text classifier that takes a short phrase and predicts whi
 ## Results
 - **Accuracy: 99.93%** on the test set
 - Precision, recall, and F1-score all ≥ 0.99 across all four languages
+- Each prediction includes a **confidence score**, showing how certain the model is (e.g. clear full sentences often score 95%+, while short ambiguous phrases score lower — see Known Limitation below)
+- A **confusion matrix** confirms strong separation between languages, with only 3 misclassifications out of 4,459 test examples
 
 ## Known Limitation
 The model performs excellently on full, formal-length phrases (matching its training data) but shows reduced accuracy on very short, informal expressions or greetings that lack language-distinctive diacritics (e.g. "Bawo ni?", "Nagode"). This is a known challenge in short-text language identification generally, not unique to this model.
