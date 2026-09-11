@@ -1,0 +1,23 @@
+Nigerian Language Identifier - Evaluation Results
+==================================================
+
+Accuracy: 0.9993
+
+Classification Report:
+              precision    recall  f1-score   support
+
+     English       1.00      1.00      1.00       656
+       Hausa       1.00      1.00      1.00      1853
+        Igbo       1.00      1.00      1.00      1111
+      Yoruba       1.00      1.00      1.00       839
+
+    accuracy                           1.00      4459
+   macro avg       1.00      1.00      1.00      4459
+weighted avg       1.00      1.00      1.00      4459
+
+Confusion Matrix:
+Labels order: ['English', 'Hausa', 'Igbo', 'Yoruba']
+[[ 656    0    0    0]
+ [   1 1852    0    0]
+ [   0    2 1109    0]
+ [   0    0    0  839]]
